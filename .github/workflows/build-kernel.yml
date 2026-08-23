@@ -10,16 +10,9 @@ on:
 jobs:
   # OPPO
   ## Oneplus
-  build-oneplus-8-series-oos13-a13-xtd:
-    name: "Oneplus 8 Series (ColorOS 13 A13 XTD)"
+  Oneplus-Kona-Tropsi-X-Kernel-Build:
+    name: "Build Oneplus 8 Series (OxygenOS 14 A14)"
     strategy:
       fail-fast: true
-    uses: ./.github/workflows/build-oneplus-8-series-oos13-a13-xtd.yml
-    secrets: inherit
-
-  build-oneplus-8-series-cos15-a15:
-    name: "Oneplus 8 Series (ColorOS 15 A15)"
-    strategy:
-      fail-fast: true
-    uses: ./.github/workflows/build-oneplus-8-series-cos15-a15.yml
+    uses: ./.github/workflows/Oneplus-Kona-Tropsi-X-Kernel-Build.yml
     secrets: inherit
