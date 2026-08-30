@@ -1,0 +1,138 @@
+name: Sync Jack Fixes (cherry-pick from upstream)
+
+# Manually triggered. Pulls commits from JackA1ltman/NonGKI_Kernel_Build_2nd
+# newer than a given date, skips any commits you list as excluded (e.g.
+# ones that conflict with your changes), and opens a PR with the result
+# instead of pushing directly — so you can review/resolve before merging.
+
+on:
+  workflow_dispatch:
+    inputs:
+      since_date:
+        description: "Pull upstream commits after this date (YYYY-MM-DD)"
+        required: true
+        default: "2026-08-22"
+      exclude_commits:
+        description: "Comma-separated commit SHAs to skip (conflicting ones)"
+        required: false
+        default: "41bfd74b97911f4995cda94527ab4f0a65be15a9"
+      upstream_branch:
+        description: "Branch on the upstream repo to pull from"
+        required: true
+        default: "mainline"
+      target_branch:
+        description: "Branch in YOUR repo to base the PR on (leave blank = default branch)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  UPSTREAM_REPO: https://github.com/JackA1ltman/NonGKI_Kernel_Build_2nd.git
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine target branch
+        id: vars
+        run: |
+          if [ -n "${{ github.event.inputs.target_branch }}" ]; then
+            echo "branch=${{ github.event.inputs.target_branch }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${{ github.event.repository.default_branch }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout your repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.vars.outputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || git remote set-url upstream "$UPSTREAM_REPO"
+          git fetch upstream "${{ github.event.inputs.upstream_branch }}"
+
+      - name: Create sync branch
+        id: syncbranch
+        run: |
+          BRANCH="sync/jack-fixes-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Cherry-pick new upstream commits
+        id: pick
+        run: |
+          set -e
+          SINCE="${{ github.event.inputs.since_date }}"
+          UPSTREAM_BRANCH="${{ github.event.inputs.upstream_branch }}"
+          IFS=',' read -ra EXCLUDE_ARR <<< "${{ github.event.inputs.exclude_commits }}"
+
+          COMMITS=$(git log "upstream/${UPSTREAM_BRANCH}" --since="${SINCE}" --no-merges --reverse --pretty=format:"%H")
+
+          if [ -z "$COMMITS" ]; then
+            echo "No new upstream commits since ${SINCE}."
+            echo "applied=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          APPLIED=0
+          SKIPPED=""
+          for sha in $COMMITS; do
+            skip=false
+            for ex in "${EXCLUDE_ARR[@]}"; do
+              ex_trimmed=$(echo "$ex" | xargs)
+              if [ -n "$ex_trimmed" ] && [ "$sha" = "$ex_trimmed" ]; then
+                skip=true
+                break
+              fi
+            done
+
+            if [ "$skip" = true ]; then
+              echo "Skipping excluded commit $sha"
+              SKIPPED="${SKIPPED}${sha}\n"
+              continue
+            fi
+
+            echo "Cherry-picking $sha"
+            if ! git cherry-pick -x "$sha"; then
+              echo "::error::Cherry-pick failed on $sha (conflict). Aborting — add this SHA to exclude_commits and re-run, or resolve manually."
+              git cherry-pick --abort
+              exit 1
+            fi
+            APPLIED=$((APPLIED+1))
+          done
+
+          echo "applied=$APPLIED" >> "$GITHUB_OUTPUT"
+          echo -e "Skipped commits:\n${SKIPPED}"
+
+      - name: Push sync branch
+        if: steps.pick.outputs.applied != '0'
+        run: git push origin "${{ steps.syncbranch.outputs.branch }}"
+
+      - name: Open pull request
+        if: steps.pick.outputs.applied != '0'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.syncbranch.outputs.branch }}
+          base: ${{ steps.vars.outputs.branch }}
+          title: "Sync: Jack's fixes since ${{ github.event.inputs.since_date }}"
+          body: |
+            Cherry-picked ${{ steps.pick.outputs.applied }} commit(s) from
+            `JackA1ltman/NonGKI_Kernel_Build_2nd` (`${{ github.event.inputs.upstream_branch }}`)
+            dated after **${{ github.event.inputs.since_date }}**.
+
+            Excluded (known conflicting) commits:
+            `${{ github.event.inputs.exclude_commits }}`
+
+            Review before merging.
