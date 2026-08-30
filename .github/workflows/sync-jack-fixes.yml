@@ -1,21 +1,27 @@
 name: Sync Jack Fixes (cherry-pick from upstream)
 
-# Manually triggered. Pulls commits from JackA1ltman/NonGKI_Kernel_Build_2nd
-# newer than a given date, skips any commits you list as excluded (e.g.
-# ones that conflict with your changes), and opens a PR with the result
-# instead of pushing directly — so you can review/resolve before merging.
+# Self-tracking sync: remembers the last upstream commit it looked at and
+# which commits conflict, so you don't re-enter a date or SHA list every
+# run. Just click "Run workflow" going forward.
+#
+# How the state works:
+#   .github/sync-state/last-synced-sha       -> last upstream commit examined
+#   .github/sync-state/skipped-commits.txt   -> commits that conflicted,
+#                                                permanently skipped from now on
+# Both files live in your repo and get committed via the PR this workflow
+# opens, so merge that PR each time to advance the state.
 
 on:
   workflow_dispatch:
     inputs:
-      since_date:
-        description: "Pull upstream commits after this date (YYYY-MM-DD)"
-        required: true
-        default: "2026-08-22"
-      exclude_commits:
-        description: "Comma-separated commit SHAs to skip (conflicting ones)"
+      bootstrap_since_date:
+        description: "First run only (no saved state yet): pull upstream commits after this date (YYYY-MM-DD). Ignored on later runs."
         required: false
-        default: "41bfd74b97911f4995cda94527ab4f0a65be15a9"
+        default: ""
+      retry_commits:
+        description: "Optional: comma-separated SHAs to give another try even though they were previously skipped"
+        required: false
+        default: ""
       upstream_branch:
         description: "Branch on the upstream repo to pull from"
         required: true
@@ -69,70 +75,120 @@ jobs:
           git checkout -b "$BRANCH"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Cherry-pick new upstream commits
+      - name: Cherry-pick new upstream commits and update state
         id: pick
         run: |
           set -e
-          SINCE="${{ github.event.inputs.since_date }}"
-          UPSTREAM_BRANCH="${{ github.event.inputs.upstream_branch }}"
-          IFS=',' read -ra EXCLUDE_ARR <<< "${{ github.event.inputs.exclude_commits }}"
+          STATE_DIR=".github/sync-state"
+          LAST_SYNCED_FILE="$STATE_DIR/last-synced-sha"
+          SKIPPED_FILE="$STATE_DIR/skipped-commits.txt"
+          mkdir -p "$STATE_DIR"
+          touch "$SKIPPED_FILE"
 
-          COMMITS=$(git log "upstream/${UPSTREAM_BRANCH}" --since="${SINCE}" --no-merges --reverse --pretty=format:"%H")
+          UPSTREAM_BRANCH="${{ github.event.inputs.upstream_branch }}"
+          BOOTSTRAP_DATE="${{ github.event.inputs.bootstrap_since_date }}"
+          RETRY_INPUT="${{ github.event.inputs.retry_commits }}"
+
+          declare -A RETRY_SET
+          IFS=',' read -ra RETRY_ARR <<< "$RETRY_INPUT"
+          for r in "${RETRY_ARR[@]}"; do
+            rt=$(echo "$r" | xargs)
+            [ -n "$rt" ] && RETRY_SET["$rt"]=1
+          done
+
+          declare -A SKIP_SET
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            sha=$(echo "$line" | awk '{print $1}')
+            [ -z "$sha" ] && continue
+            if [ -z "${RETRY_SET[$sha]:-}" ]; then
+              SKIP_SET["$sha"]=1
+            fi
+          done < "$SKIPPED_FILE"
+
+          if [ -s "$LAST_SYNCED_FILE" ]; then
+            LAST_SYNCED=$(tr -d '[:space:]' < "$LAST_SYNCED_FILE")
+            echo "Resuming after $LAST_SYNCED"
+            COMMITS=$(git log "${LAST_SYNCED}..upstream/${UPSTREAM_BRANCH}" --no-merges --reverse --pretty=format:"%H")
+          else
+            if [ -z "$BOOTSTRAP_DATE" ]; then
+              echo "::error::No sync state yet. Run once with 'bootstrap_since_date' set (YYYY-MM-DD) to start."
+              exit 1
+            fi
+            echo "No prior state — bootstrapping from $BOOTSTRAP_DATE"
+            COMMITS=$(git log "upstream/${UPSTREAM_BRANCH}" --since="$BOOTSTRAP_DATE" --no-merges --reverse --pretty=format:"%H")
+          fi
+
+          : > /tmp/applied.md
+          : > /tmp/skipped.md
 
           if [ -z "$COMMITS" ]; then
-            echo "No new upstream commits since ${SINCE}."
+            echo "Nothing new upstream."
             echo "applied=0" >> "$GITHUB_OUTPUT"
+            echo "new_skips=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           APPLIED=0
-          SKIPPED=""
-          for sha in $COMMITS; do
-            skip=false
-            for ex in "${EXCLUDE_ARR[@]}"; do
-              ex_trimmed=$(echo "$ex" | xargs)
-              if [ -n "$ex_trimmed" ] && [ "$sha" = "$ex_trimmed" ]; then
-                skip=true
-                break
-              fi
-            done
+          NEW_SKIPS=0
+          NEWEST=""
 
-            if [ "$skip" = true ]; then
-              echo "Skipping excluded commit $sha"
-              SKIPPED="${SKIPPED}${sha}\n"
+          for sha in $COMMITS; do
+            NEWEST="$sha"
+            SUBJECT=$(git log -1 --format=%s "$sha")
+
+            if [ -n "${SKIP_SET[$sha]:-}" ]; then
+              echo "Skipping known-conflicting $sha"
               continue
             fi
 
-            echo "Cherry-picking $sha"
-            if ! git cherry-pick -x "$sha"; then
-              echo "::error::Cherry-pick failed on $sha (conflict). Aborting — add this SHA to exclude_commits and re-run, or resolve manually."
-              git cherry-pick --abort
-              exit 1
+            echo "Cherry-picking $sha ($SUBJECT)"
+            if git cherry-pick -x "$sha"; then
+              APPLIED=$((APPLIED+1))
+              echo "- \`${sha:0:10}\` $SUBJECT" >> /tmp/applied.md
+              grep -v "^${sha} " "$SKIPPED_FILE" > "${SKIPPED_FILE}.tmp" 2>/dev/null || true
+              mv "${SKIPPED_FILE}.tmp" "$SKIPPED_FILE" 2>/dev/null || true
+            else
+              git cherry-pick --abort || true
+              echo "Conflict on $sha — recording as permanently skipped"
+              grep -v "^${sha} " "$SKIPPED_FILE" > "${SKIPPED_FILE}.tmp" 2>/dev/null || true
+              mv "${SKIPPED_FILE}.tmp" "$SKIPPED_FILE" 2>/dev/null || true
+              echo "$sha $SUBJECT" >> "$SKIPPED_FILE"
+              NEW_SKIPS=$((NEW_SKIPS+1))
+              echo "- \`${sha:0:10}\` $SUBJECT" >> /tmp/skipped.md
             fi
-            APPLIED=$((APPLIED+1))
           done
 
-          echo "applied=$APPLIED" >> "$GITHUB_OUTPUT"
-          echo -e "Skipped commits:\n${SKIPPED}"
+          echo "$NEWEST" > "$LAST_SYNCED_FILE"
 
-      - name: Push sync branch
-        if: steps.pick.outputs.applied != '0'
-        run: git push origin "${{ steps.syncbranch.outputs.branch }}"
+          echo "applied=$APPLIED" >> "$GITHUB_OUTPUT"
+          echo "new_skips=$NEW_SKIPS" >> "$GITHUB_OUTPUT"
+
+      - name: Build PR body
+        if: steps.pick.outputs.applied != '0' || steps.pick.outputs.new_skips != '0'
+        run: |
+          {
+            echo "Synced upstream \`${{ github.event.inputs.upstream_branch }}\` from JackA1ltman/NonGKI_Kernel_Build_2nd."
+            echo ""
+            echo "**Applied (${{ steps.pick.outputs.applied }}):**"
+            if [ -s /tmp/applied.md ]; then cat /tmp/applied.md; else echo "_none_"; fi
+            echo ""
+            echo "**Skipped due to conflict (${{ steps.pick.outputs.new_skips }} new):**"
+            if [ -s /tmp/skipped.md ]; then cat /tmp/skipped.md; else echo "_none new_"; fi
+            echo ""
+            echo "Skipped commits are saved in \`.github/sync-state/skipped-commits.txt\` and won't be retried automatically."
+            echo "To give one another try later, pass its SHA via the **retry_commits** input on a future run."
+            echo ""
+            echo "Merge this PR to advance the sync state, even if 0 were applied — otherwise the next run rechecks the same range."
+          } > /tmp/pr-body.md
 
       - name: Open pull request
-        if: steps.pick.outputs.applied != '0'
+        if: steps.pick.outputs.applied != '0' || steps.pick.outputs.new_skips != '0'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ steps.syncbranch.outputs.branch }}
           base: ${{ steps.vars.outputs.branch }}
-          title: "Sync: Jack's fixes since ${{ github.event.inputs.since_date }}"
-          body: |
-            Cherry-picked ${{ steps.pick.outputs.applied }} commit(s) from
-            `JackA1ltman/NonGKI_Kernel_Build_2nd` (`${{ github.event.inputs.upstream_branch }}`)
-            dated after **${{ github.event.inputs.since_date }}**.
-
-            Excluded (known conflicting) commits:
-            `${{ github.event.inputs.exclude_commits }}`
-
-            Review before merging.
+          commit-message: "sync: update sync-state after Jack fixes sync"
+          title: "Sync: Jack's fixes (${{ steps.pick.outputs.applied }} applied, ${{ steps.pick.outputs.new_skips }} newly skipped)"
+          body-path: /tmp/pr-body.md
