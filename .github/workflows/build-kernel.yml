@@ -1,0 +1,24 @@
+name: Build Kernel
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  workflow_call:
+
+jobs:
+  # OnePlus
+  build-oneplus-8-series-oos13-a13-xtd:
+    name: "OnePlus 8 Series (ColorOS 13 A13 XTD)"
+    strategy:
+      fail-fast: true
+    uses: ./.github/workflows/build-oneplus-8-series-oos13-a13-xtd.yml
+    secrets: inherit
+
+  build-oneplus-8-series-cos15-a15:
+    name: "OnePlus 8 Series (ColorOS 15 A15)"
+    strategy:
+      fail-fast: true
+    uses: ./.github/workflows/build-oneplus-8-series-cos15-a15.yml
+    secrets: inherit

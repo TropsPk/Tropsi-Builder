@@ -1,0 +1,15 @@
+name: 'Patch NoMount for Kernel.'
+
+runs:
+  using: 'composite'
+  steps:
+      - name: Patch NoMount
+        if: env.NOMOUNT_ENABLE == 'true'
+        shell: bash
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel/
+          curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh | bash -s
+
+          echo "CONFIG_NOMOUNT=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+
+          echo "[+] Patched NoMount for your kernel successfully."
