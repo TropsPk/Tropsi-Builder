@@ -130,10 +130,7 @@ runs:
             for i in "${!FIXED_LIST[@]}"; do
               echo "Patching -> ${FIXED_LIST[$i]}"
 
-              if [ -f "/tmp/Patches/Patch/${FIXED_LIST[$i]}.patch" ]; then
-                cp "/tmp/Patches/Patch/${FIXED_LIST[$i]}.patch" ./
-
-              elif [[ -z "${{ env.SUSFS_FOLDER_FIXED }}" ]]; then
+              if [[ -z "${{ env.SUSFS_FOLDER_FIXED }}" ]]; then
                 cp NonGKI_Kernel_Patches/${FIXED_LIST[$i]}.patch ./
 
               else
