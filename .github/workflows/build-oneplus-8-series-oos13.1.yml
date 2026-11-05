@@ -37,7 +37,7 @@ env:
   KERNELSU_AUTO_FORK : "bakasu"
 
   SUSFS_ENABLE : true
-  SUSFS_FIXED : false
+  SUSFS_FIXED : true
 
   AK3_SOURCE : "https://github.com/TropsPk/OP8_AnyKernel3.git"
   AK3_BRANCH : "main"
@@ -57,11 +57,11 @@ env:
 
   KERNELSU_METHOD: "shell"
 
-  PATCHES_SOURCE: ""
-  PATCHES_BRANCH: ""
+  PATCHES_SOURCE: "TropsPk/OnePlus-Kernel-Stuff"
+  PATCHES_BRANCH: "fix-susfs"
 
-  SUSFS_FOLDER_FIXED: ""
-  SUSFS_PATCH_FIXED: ""
+  SUSFS_FOLDER_FIXED: "Stock"
+  SUSFS_PATCH_FIXED: "susfs_fix_4.19.157"
 
   REKERNEL_ENABLE: "false"
   DROIDSPACES_ENABLE: "false"
