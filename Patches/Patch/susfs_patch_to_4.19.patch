@@ -543,9 +543,9 @@ index 5e94ec9..9b50196 100644
 +
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +
- #ifdef CONFIG_OPLUS_SECURE_GUARD
- #ifdef CONFIG_OPLUS_MOUNT_BLOCK
- #ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+ /* Maximum number of mounts in a mount namespace */
+ unsigned int sysctl_mount_max __read_mostly = 100000;
+ 
 @@ -108,6 +119,12 @@ static int mnt_alloc_id(struct mount *mnt)
  
  static void mnt_free_id(struct mount *mnt)
@@ -910,10 +910,10 @@ index 74aeabb..2d0674e 100644
  {
  	struct inotify_inode_mark *inode_mark;
  	struct inode *inode;
-@@ -90,6 +113,60 @@ static void inotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
- 		 * used only internally to the kernel.
- 		 */
- 		u32 mask = mark->mask & IN_ALL_EVENTS;
+@@ -83,6 +106,60 @@ static void inotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
+ 	inode_mark = container_of(mark, struct inotify_inode_mark, fsn_mark);
+ 	inode = igrab(fsnotify_conn_inode(mark->connector));
+ 	if (inode) {
 +#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 +		if (susfs_is_current_app_uid()) {
 +			bool is_fuse = false;
@@ -921,9 +921,9 @@ index 74aeabb..2d0674e 100644
 +				unsigned long ino = inode->i_ino;
 +				dev_t dev = inode->i_sb->s_dev;
 +				susfs_sus_kstat_spoof_inotify_fdinfo(&ino, &dev);
-+				seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
++				seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:0 ",
 +						inode_mark->wd, ino, dev,
-+						mask, mark->ignored_mask);
++						inotify_mark_user_mask(mark));
 +				show_mark_fhandle(m, inode);
 +				seq_putc(m, '\n');
 +				iput(inode);
@@ -951,9 +951,9 @@ index 74aeabb..2d0674e 100644
 +				if (!d_backing_inode(path.dentry)) {
 +					goto out_path_put;
 +				}
-+				seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
++				seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:0 ",
 +						inode_mark->wd, d_backing_inode(path.dentry)->i_ino, d_backing_inode(path.dentry)->i_sb->s_dev,
-+						mask, mark->ignored_mask);
++						inotify_mark_user_mask(mark));
 +				show_mark_fhandle(m, d_backing_inode(path.dentry));
 +				seq_putc(m, '\n');
 +				path_put(&path);
@@ -968,9 +968,9 @@ index 74aeabb..2d0674e 100644
 +		}
 +orig_flow:
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
- 		seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
+ 		seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:0 ",
  			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
- 			   mask, mark->ignored_mask);
+ 			   inotify_mark_user_mask(mark));
 diff --git a/fs/proc/base.c b/fs/proc/base.c
 index 78692a8..6100839 100644
 --- a/fs/proc/base.c
