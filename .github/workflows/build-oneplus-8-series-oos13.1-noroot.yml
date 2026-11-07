@@ -63,7 +63,7 @@ env:
 
   SUSFS_FOLDER_FIXED: "Stock"
   SUSFS_PATCH_FIXED: "susfs_fix_4.19.157"
-  SUSFS_FIX_MERGE: "false" # Enable if a hunk fails even though your fix patch has it, to merge the fix into the SUSFS patch.
+  SUSFS_FIX_MERGE: "true" # Enable if a hunk fails even though your fix patch has it, to merge the fix into the SUSFS patch.
 
   REKERNEL_ENABLE: "false"
   DROIDSPACES_ENABLE: "false"
