@@ -1,4 +1,4 @@
-name: Build OnePlus 8 Series (OxygenOS 13 A13)
+name: Build OnePlus 8 Series (OxygenOS 13.1 A13) (Tropsi-X Kernel)
 
 on:
   workflow_call:
@@ -91,7 +91,7 @@ env:
 
 jobs:
   build-kernel:
-    name: OnePlus 8 Series (OxygenOS 13 A13)
+    name: OnePlus 8 Series (OxygenOS 13.1 A13) (Tropsi-X Kernel)
     runs-on: ubuntu-22.04
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"

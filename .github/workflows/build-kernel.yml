@@ -10,7 +10,7 @@ on:
 jobs:
   # OnePlus
   build-oneplus-8-series-oos13_1:
-    name: "OnePlus 8 Series (OxygenOS 13.1 A13)"
+    name: "OnePlus 8 Series (OxygenOS 13.1 A13 Tropsi-X)"
     strategy:
       fail-fast: true
     uses: ./.github/workflows/build-oneplus-8-series-oos13.1.yml
