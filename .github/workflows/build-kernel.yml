@@ -9,16 +9,9 @@ on:
 
 jobs:
   # OnePlus
-  build-oneplus-8-series-oos13-a13-xtd:
-    name: "OnePlus 8 Series (ColorOS 13 A13 XTD)"
+  build-oneplus-8-series-oos13_1:
+    name: "OnePlus 8 Series (OxygenOS 13.1 A13)"
     strategy:
       fail-fast: true
-    uses: ./.github/workflows/build-oneplus-8-series-oos13-a13-xtd.yml
-    secrets: inherit
-
-  build-oneplus-8-series-cos15-a15:
-    name: "OnePlus 8 Series (ColorOS 15 A15)"
-    strategy:
-      fail-fast: true
-    uses: ./.github/workflows/build-oneplus-8-series-cos15-a15.yml
+    uses: ./.github/workflows/build-oneplus-8-series-oos13.1.yml
     secrets: inherit
