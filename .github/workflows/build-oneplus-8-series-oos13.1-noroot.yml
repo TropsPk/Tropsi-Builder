@@ -47,7 +47,7 @@ env:
   NEED_DTBO : false
   NEED_SAFE_DTBO : false
 
-  ROM_TEXT : "oxygen13.1_a13"
+  ROM_TEXT : "oxygen13.1_a13_noroot"
 
   # Other env
   PYTHON_VERSION: "3"
