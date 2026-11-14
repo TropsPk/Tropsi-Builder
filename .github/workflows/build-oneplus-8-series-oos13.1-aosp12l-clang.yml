@@ -9,7 +9,8 @@ env:
   DEVICE_NAME : "oneplus_8_cn"
   DEVICE_CODENAME : "instantnoodle"
 
-  CUSTOM_CMDS : "CROSS_COMPILE=aarch64-linux-gnu- NM=llvm-nm OBJDUMP=llvm-objdump STRIP=llvm-strip"
+  # AOSP clang ships no aarch64-linux-gnu-* binutils: CROSS_COMPILE comes from the gcc-64/gcc-32 exported by build-process, CLANG_TRIPLE sets the clang target
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : ""
 
   KERNEL_SOURCE : "https://github.com/TropsPk/Tropsi_X_Kernel_SM8250"
