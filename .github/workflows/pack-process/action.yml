@@ -105,10 +105,16 @@ runs:
           cd tmp
           7za a -mx9 tmp.zip *
           cd ..
-          cp -fp tmp/tmp.zip ${{ env.DEVICE_CODENAME }}-${{ env.ROM_TEXT }}-$TIME-${{ env.PACK_METHOD }}.zip
+          ZIP_NAME="Tropsi-X-Kernel-r${{ github.run_number }}"
+          if [[ "${{ env.ROM_TEXT }}" == *noroot* ]]; then
+            ZIP_NAME="$ZIP_NAME-noroot"
+          fi
+          ZIP_NAME="$ZIP_NAME.zip"
+
+          cp -fp tmp/tmp.zip "$ZIP_NAME"
           rm -rf tmp
 
-          echo "PACK_NAME=${{ env.DEVICE_CODENAME }}-${{ env.ROM_TEXT }}-$TIME-${{ env.PACK_METHOD }}.zip" >> $GITHUB_ENV
+          echo "PACK_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Make Latest Boot Image
         if: env.PACK_METHOD == 'MKBOOTIMG'
